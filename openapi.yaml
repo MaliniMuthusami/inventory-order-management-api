@@ -1,0 +1,1029 @@
+openapi: 3.0.3
+info:
+  title: Inventory & Order Management API
+  description: |
+    Secure REST API for managing products, categories, inventory levels, and customer orders.
+
+    ## Authentication
+    All endpoints except `/api/auth/**` require a **Bearer JWT token**.
+
+    1. Register via `POST /api/auth/register?role=ADMIN` or `?role=USER`
+    2. Login via `POST /api/auth/login` to receive the token
+    3. Click **Authorize** and enter: `<your_token>` (without "Bearer")
+
+    ## Roles
+    | Role          | Permissions |
+    |---------------|-------------|
+    | `ROLE_ADMIN`  | Manage categories, products, inventory |
+    | `ROLE_USER`   | Browse products, place and manage own orders |
+
+    ## Order Lifecycle
+    ```
+    CREATED ──► CONFIRMED
+       │
+       └──► CANCELLED  (stock restored automatically)
+    ```
+  version: 1.0.0
+  contact:
+    name: Inventory API Support
+    email: admin@inventory.com
+
+servers:
+  - url: http://localhost:8080
+    description: Local development server
+
+security:
+  - bearerAuth: []
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Enter your JWT token (obtained from /api/auth/login)
+
+  schemas:
+
+    # ── Request Schemas ────────────────────────────────────────────────────────
+
+    RegisterRequest:
+      type: object
+      required: [username, email, password]
+      properties:
+        username:
+          type: string
+          minLength: 3
+          maxLength: 50
+          example: john_doe
+        email:
+          type: string
+          format: email
+          example: john@example.com
+        password:
+          type: string
+          minLength: 6
+          example: secret123
+
+    LoginRequest:
+      type: object
+      required: [username, password]
+      properties:
+        username:
+          type: string
+          example: john_doe
+        password:
+          type: string
+          example: secret123
+
+    CategoryRequest:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+          maxLength: 100
+          example: Electronics
+        description:
+          type: string
+          maxLength: 500
+          example: Electronic devices and accessories
+
+    ProductCreateRequest:
+      type: object
+      required: [name, price]
+      properties:
+        name:
+          type: string
+          maxLength: 200
+          example: Wireless Headphones
+        description:
+          type: string
+          maxLength: 1000
+          example: Noise-cancelling over-ear headphones
+        price:
+          type: number
+          format: double
+          exclusiveMinimum: 0
+          example: 149.99
+        stockQuantity:
+          type: integer
+          minimum: 0
+          example: 50
+        categoryIds:
+          type: array
+          items:
+            type: string
+          example: ["64abc123def456", "64abc789ghi012"]
+
+    ProductUpdateRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          maxLength: 200
+          example: Wireless Headphones Pro
+        description:
+          type: string
+          maxLength: 1000
+        price:
+          type: number
+          format: double
+          exclusiveMinimum: 0
+          example: 179.99
+        stockQuantity:
+          type: integer
+          minimum: 0
+          example: 75
+        categoryIds:
+          type: array
+          items:
+            type: string
+        active:
+          type: boolean
+          example: true
+
+    PlaceOrderRequest:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          minItems: 1
+          items:
+            $ref: '#/components/schemas/OrderItemRequest'
+
+    OrderItemRequest:
+      type: object
+      required: [productId, quantity]
+      properties:
+        productId:
+          type: string
+          example: 64abc123def456
+        quantity:
+          type: integer
+          minimum: 1
+          example: 3
+
+    # ── Response Schemas ───────────────────────────────────────────────────────
+
+    AuthResponse:
+      type: object
+      properties:
+        token:
+          type: string
+          example: eyJhbGciOiJIUzI1NiJ9...
+        type:
+          type: string
+          example: Bearer
+        username:
+          type: string
+          example: john_doe
+        email:
+          type: string
+          example: john@example.com
+        role:
+          type: string
+          enum: [ROLE_ADMIN, ROLE_USER]
+          example: ROLE_USER
+
+    CategoryResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          example: 64abc123def456
+        name:
+          type: string
+          example: Electronics
+        description:
+          type: string
+          example: Electronic devices and accessories
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    ProductResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          example: 64abc123def456
+        name:
+          type: string
+          example: Wireless Headphones
+        description:
+          type: string
+          example: Noise-cancelling over-ear headphones
+        price:
+          type: number
+          format: double
+          example: 149.99
+        stockQuantity:
+          type: integer
+          example: 50
+        categories:
+          type: array
+          items:
+            $ref: '#/components/schemas/CategoryResponse'
+        active:
+          type: boolean
+          example: true
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    ProductPageResponse:
+      type: object
+      properties:
+        content:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProductResponse'
+        page:
+          type: integer
+          example: 0
+        size:
+          type: integer
+          example: 10
+        totalElements:
+          type: integer
+          format: int64
+          example: 25
+        totalPages:
+          type: integer
+          example: 3
+        first:
+          type: boolean
+          example: true
+        last:
+          type: boolean
+          example: false
+
+    OrderItemResponse:
+      type: object
+      properties:
+        productId:
+          type: string
+          example: 64abc123def456
+        productName:
+          type: string
+          example: Wireless Headphones
+        quantity:
+          type: integer
+          example: 3
+        unitPrice:
+          type: number
+          format: double
+          example: 149.99
+        subtotal:
+          type: number
+          format: double
+          example: 449.97
+
+    OrderResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          example: 64xyz789abc123
+        userId:
+          type: string
+          example: 64usr456def789
+        username:
+          type: string
+          example: jane_user
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/OrderItemResponse'
+        totalAmount:
+          type: number
+          format: double
+          example: 449.97
+        status:
+          type: string
+          enum: [CREATED, CONFIRMED, CANCELLED]
+          example: CREATED
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    OrderPageResponse:
+      type: object
+      properties:
+        content:
+          type: array
+          items:
+            $ref: '#/components/schemas/OrderResponse'
+        page:
+          type: integer
+          example: 0
+        size:
+          type: integer
+          example: 10
+        totalElements:
+          type: integer
+          format: int64
+          example: 5
+        totalPages:
+          type: integer
+          example: 1
+        first:
+          type: boolean
+          example: true
+        last:
+          type: boolean
+          example: true
+
+    MessageResponse:
+      type: object
+      properties:
+        message:
+          type: string
+          example: Operation completed successfully
+        success:
+          type: boolean
+          example: true
+
+    ErrorResponse:
+      type: object
+      properties:
+        status:
+          type: integer
+          example: 404
+        error:
+          type: string
+          example: Not Found
+        message:
+          type: string
+          example: Product not found with id: abc123
+        timestamp:
+          type: string
+          format: date-time
+
+    ValidationErrorResponse:
+      type: object
+      properties:
+        status:
+          type: integer
+          example: 400
+        error:
+          type: string
+          example: Validation Failed
+        fieldErrors:
+          type: object
+          additionalProperties:
+            type: string
+          example:
+            name: "Product name is required"
+            price: "Price must be greater than 0"
+        timestamp:
+          type: string
+          format: date-time
+
+# ── Paths ──────────────────────────────────────────────────────────────────────
+
+paths:
+
+  # ── Authentication ────────────────────────────────────────────────────────────
+
+  /api/auth/register:
+    post:
+      tags: [Authentication]
+      summary: Register a new user
+      description: |
+        Creates a new user account. Use the `role` query parameter to assign the role.
+        - `role=ADMIN` — can manage categories, products, and inventory
+        - `role=USER` — can browse products and place orders (default)
+      security: []
+      parameters:
+        - name: role
+          in: query
+          description: Role to assign (ADMIN or USER)
+          schema:
+            type: string
+            enum: [ADMIN, USER]
+            default: USER
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterRequest'
+            examples:
+              registerAdmin:
+                summary: Register as Admin
+                value:
+                  username: john_admin
+                  email: john@example.com
+                  password: secret123
+              registerUser:
+                summary: Register as User
+                value:
+                  username: jane_user
+                  email: jane@example.com
+                  password: secret123
+      responses:
+        '201':
+          description: User registered successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+        '400':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationErrorResponse'
+        '409':
+          description: Username or email already exists
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/auth/login:
+    post:
+      tags: [Authentication]
+      summary: Login and receive a JWT token
+      description: Authenticates the user and returns a JWT token valid for 24 hours.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+            example:
+              username: john_admin
+              password: secret123
+      responses:
+        '200':
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+        '401':
+          description: Invalid credentials
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  # ── Categories ────────────────────────────────────────────────────────────────
+
+  /api/categories:
+    post:
+      tags: [Categories]
+      summary: Create a new category [ADMIN]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CategoryRequest'
+            example:
+              name: Electronics
+              description: Electronic devices and accessories
+      responses:
+        '201':
+          description: Category created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CategoryResponse'
+        '400':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationErrorResponse'
+        '403':
+          description: Access denied — Admin role required
+        '409':
+          description: Category name already exists
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    get:
+      tags: [Categories]
+      summary: Get all categories [ADMIN]
+      responses:
+        '200':
+          description: List of all categories
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/CategoryResponse'
+        '403':
+          description: Access denied — Admin role required
+
+  /api/categories/{id}:
+    get:
+      tags: [Categories]
+      summary: Get a category by ID [ADMIN]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          example: 64abc123def456
+      responses:
+        '200':
+          description: Category found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CategoryResponse'
+        '403':
+          description: Access denied
+        '404':
+          description: Category not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    put:
+      tags: [Categories]
+      summary: Update a category [ADMIN]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CategoryRequest'
+            example:
+              name: Electronics & Gadgets
+              description: Updated description
+      responses:
+        '200':
+          description: Category updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CategoryResponse'
+        '403':
+          description: Access denied
+        '404':
+          description: Category not found
+        '409':
+          description: Category name already taken
+
+    delete:
+      tags: [Categories]
+      summary: Delete a category [ADMIN]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Category deleted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageResponse'
+        '403':
+          description: Access denied
+        '404':
+          description: Category not found
+
+  # ── Products ──────────────────────────────────────────────────────────────────
+
+  /api/products:
+    post:
+      tags: [Products]
+      summary: Create a new product [ADMIN]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProductCreateRequest'
+            example:
+              name: Wireless Headphones
+              description: Noise-cancelling over-ear headphones
+              price: 149.99
+              stockQuantity: 50
+              categoryIds: ["64abc123def456"]
+      responses:
+        '201':
+          description: Product created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProductResponse'
+        '400':
+          description: Validation error
+        '403':
+          description: Access denied — Admin role required
+        '404':
+          description: One or more category IDs not found
+
+    get:
+      tags: [Products]
+      summary: List all active products with pagination and sorting [ALL]
+      parameters:
+        - name: page
+          in: query
+          description: Page number (0-based)
+          schema:
+            type: integer
+            default: 0
+        - name: size
+          in: query
+          description: Page size
+          schema:
+            type: integer
+            default: 10
+        - name: sortBy
+          in: query
+          description: "Sort field: name, price, stockQuantity, createdAt"
+          schema:
+            type: string
+            default: name
+        - name: direction
+          in: query
+          description: Sort direction
+          schema:
+            type: string
+            enum: [asc, desc]
+            default: asc
+      responses:
+        '200':
+          description: Paginated list of active products
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProductPageResponse'
+
+  /api/products/{id}:
+    get:
+      tags: [Products]
+      summary: Get product by ID [ALL]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Product found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProductResponse'
+        '404':
+          description: Product not found
+
+    put:
+      tags: [Products]
+      summary: Update a product [ADMIN]
+      description: All fields are optional — only provided fields are updated.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProductUpdateRequest'
+            example:
+              name: Wireless Headphones Pro
+              price: 179.99
+              stockQuantity: 75
+              active: true
+      responses:
+        '200':
+          description: Product updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProductResponse'
+        '403':
+          description: Access denied
+        '404':
+          description: Product not found
+
+    delete:
+      tags: [Products]
+      summary: Delete a product [ADMIN]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Product deleted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageResponse'
+        '403':
+          description: Access denied
+        '404':
+          description: Product not found
+
+  /api/products/search:
+    get:
+      tags: [Products]
+      summary: Search products by name (case-insensitive) [ALL]
+      parameters:
+        - name: name
+          in: query
+          required: true
+          description: Partial or full product name to search
+          schema:
+            type: string
+          example: wireless
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 0
+        - name: size
+          in: query
+          schema:
+            type: integer
+            default: 10
+      responses:
+        '200':
+          description: Matching products
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProductPageResponse'
+
+  /api/products/category/{categoryId}:
+    get:
+      tags: [Products]
+      summary: Filter products by category [ALL]
+      parameters:
+        - name: categoryId
+          in: path
+          required: true
+          schema:
+            type: string
+          example: 64abc123def456
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 0
+        - name: size
+          in: query
+          schema:
+            type: integer
+            default: 10
+        - name: sortBy
+          in: query
+          schema:
+            type: string
+            default: price
+        - name: direction
+          in: query
+          schema:
+            type: string
+            enum: [asc, desc]
+            default: asc
+      responses:
+        '200':
+          description: Products in category
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProductPageResponse'
+        '404':
+          description: Category not found
+
+  /api/products/low-stock:
+    get:
+      tags: [Products]
+      summary: View low-stock products [ALL]
+      description: Returns all active products whose stock quantity is at or below the given threshold, sorted by stock ascending.
+      parameters:
+        - name: threshold
+          in: query
+          description: Stock level threshold (inclusive)
+          schema:
+            type: integer
+            default: 10
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 0
+        - name: size
+          in: query
+          schema:
+            type: integer
+            default: 10
+      responses:
+        '200':
+          description: Low-stock products
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProductPageResponse'
+
+  # ── Orders ────────────────────────────────────────────────────────────────────
+
+  /api/orders:
+    post:
+      tags: [Orders]
+      summary: Place a new order [USER]
+      description: |
+        Validates stock for all items before processing. If all items are available:
+        - Deducts stock from each product
+        - Creates the order with status CREATED
+        - Captures product name and price as a snapshot in the order
+
+        Returns **409 Conflict** if any product has insufficient stock.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PlaceOrderRequest'
+            example:
+              items:
+                - productId: "64abc123def456"
+                  quantity: 3
+                - productId: "64abc789ghi012"
+                  quantity: 1
+      responses:
+        '201':
+          description: Order placed successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrderResponse'
+        '400':
+          description: Validation error or inactive product
+        '403':
+          description: Access denied — User role required
+        '404':
+          description: Product not found
+        '409':
+          description: Insufficient stock
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                status: 409
+                error: Insufficient Stock
+                message: "Insufficient stock for 'Wireless Headphones': requested 10, available 3"
+
+    get:
+      tags: [Orders]
+      summary: View own order history [USER]
+      parameters:
+        - name: status
+          in: query
+          required: false
+          description: Filter by order status
+          schema:
+            type: string
+            enum: [CREATED, CONFIRMED, CANCELLED]
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 0
+        - name: size
+          in: query
+          schema:
+            type: integer
+            default: 10
+      responses:
+        '200':
+          description: Paginated order history
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrderPageResponse'
+        '403':
+          description: Access denied
+
+  /api/orders/{id}:
+    get:
+      tags: [Orders]
+      summary: Get a specific order by ID [USER]
+      description: Only returns orders belonging to the authenticated user.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Order found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrderResponse'
+        '403':
+          description: Access denied
+        '404':
+          description: Order not found (or belongs to another user)
+
+  /api/orders/{id}/confirm:
+    patch:
+      tags: [Orders]
+      summary: Confirm a CREATED order [USER]
+      description: Moves the order from CREATED → CONFIRMED. Only CREATED orders can be confirmed.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Order confirmed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrderResponse'
+        '400':
+          description: Order is not in CREATED status
+        '403':
+          description: Access denied
+        '404':
+          description: Order not found
+
+  /api/orders/{id}/cancel:
+    patch:
+      tags: [Orders]
+      summary: Cancel an order and restore stock [USER]
+      description: |
+        Cancels a CREATED order and automatically restores stock for every item.
+
+        **Rules:**
+        - Only CREATED orders can be cancelled
+        - CONFIRMED orders cannot be cancelled
+        - Stock is restored immediately upon cancellation
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Order cancelled and stock restored
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrderResponse'
+        '400':
+          description: Order cannot be cancelled (already confirmed or cancelled)
+        '403':
+          description: Access denied
+        '404':
+          description: Order not found
+
+tags:
+  - name: Authentication
+    description: Register a new user account and login to obtain a JWT token
+  - name: Categories
+    description: "**[ADMIN only]** Create, update, delete, and view product categories"
+  - name: Products
+    description: "**[ADMIN]** manage products | **[ALL authenticated]** browse, search, filter"
+  - name: Orders
+    description: "**[USER only]** Place orders, view order history, confirm and cancel orders"
